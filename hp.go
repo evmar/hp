@@ -24,6 +24,7 @@ import (
 )
 
 var flag_profile *bool = flag.Bool("profile", false, "whether to profile hp itself")
+var flag_syms *string = flag.String("syms", "", "load symbols from file instead of binary")
 
 func CleanupStacks(profile *Profile, syms Symbols) map[uint64]string {
 	// Map of symbol name -> address for that symbol.
@@ -134,7 +135,7 @@ func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
 
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
-	nodeKeepCount := 300
+	nodeKeepCount := 100
 	log.Printf("keeping nodes with cumulative >= %.1fk", float32(nodelist[nodeKeepCount].(*Node).cum.InuseBytes)/1024.0)
 	for _, xn := range nodelist[:nodeKeepCount] {
 		n := xn.(*Node)
@@ -191,17 +192,23 @@ func main() {
 	}
 	flag.Parse()
 
-	if len(flag.Args()) < 3 {
-		log.Fatalf("usage: %s binary profile", os.Args[0])
-	}
-	binaryPath := flag.Arg(1)
-	profilePath := flag.Arg(2)
-
 	if *flag_profile {
 		f, err := os.Create("goprof")
 		check(err)
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
+	}
+
+	var symsPath, binaryPath, profilePath string
+	if len(*flag_syms) > 0 {
+		symsPath, profilePath = *flag_syms, flag.Arg(0)
+	} else {
+		binaryPath, profilePath = flag.Arg(0), flag.Arg(1)
+	}
+	log.Printf("%q %q %q", symsPath, binaryPath, profilePath)
+
+	if len(profilePath) == 0 {
+		log.Fatalf("usage: %s binary profile", os.Args[0])
 	}
 
 	profChan := make(chan *Profile)
@@ -216,12 +223,21 @@ func main() {
 	}()
 
 	symChan := make(chan Symbols)
-	go func() {
-		log.Printf("reading symbols from %s", binaryPath)
-		syms := LoadSyms(binaryPath)
-		log.Printf("loaded %d syms", len(syms))
-		symChan <- syms
-	}()
+	if len(binaryPath) > 0 {
+		go func() {
+			log.Printf("reading symbols from %s", binaryPath)
+			syms := LoadSyms(binaryPath)
+			log.Printf("loaded %d syms", len(syms))
+			symChan <- syms
+		}()
+	} else {
+		go func() {
+			log.Printf("reading symbol map from %s", symsPath)
+			syms := LoadSymsMap(symsPath)
+			log.Printf("loaded %d syms", len(syms))
+			symChan <- syms
+		}()
+	}
 
 	syms := <-symChan
 	profile := <-profChan

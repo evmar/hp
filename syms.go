@@ -19,6 +19,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"os"
+	"bufio"
+	"io"
+	"strconv"
 )
 
 type Symbol struct {
@@ -53,6 +57,33 @@ func LoadSyms(path string) Symbols {
 		}
 	}
 	sort.Sort(syms)
+	return syms
+}
+
+func LoadSymsMap(path string) Symbols {
+	f, err := os.Open(path)
+	check(err)
+	r := bufio.NewReader(f)
+
+	var syms Symbols
+	for {
+		s, err := r.ReadSlice(' ')
+		if err == io.EOF {
+			break
+		}
+		check(err)
+		addr := parseAddr(s[:len(s)-1])
+
+		s, err = r.ReadSlice(' ')
+		check(err)
+		size, err := strconv.ParseUint(string(s[:len(s)-1]), 10, 64)
+		check(err)
+
+		name, err := r.ReadSlice('\n')
+		check(err)
+
+		syms = append(syms, &Symbol{addr, size, string(name[:len(name)-1])})
+	}
 	return syms
 }
 
