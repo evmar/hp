@@ -35,6 +35,16 @@ func (s Symbols) Len() int           { return len(s) }
 func (s Symbols) Less(i, j int) bool { return s[i].addr < s[j].addr }
 func (s Symbols) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
+func stripDotted(name string) string {
+	// Sometimes symbols have suffixes like ".part.123" or ".isra.134".
+	// Strip it.
+	ofs := strings.Index(name, ".")
+	if ofs >= 0 {
+		return name[:ofs]
+	}
+	return name
+}
+
 func LoadSyms(path string) Symbols {
 	f, err := elf.Open(path)
 	check(err)
@@ -45,15 +55,7 @@ func LoadSyms(path string) Symbols {
 	syms := make(Symbols, 0, len(elfsyms))
 	for _, sym := range elfsyms {
 		if sym.Value > 0 && sym.Size > 0 {
-			// Sometimes symbols have suffixes like ".part.123" or ".isra.134".
-			// Strip it.
-			name := sym.Name
-			ofs := strings.Index(name, ".")
-			if ofs >= 0 {
-				name = name[:ofs]
-			}
-
-			syms = append(syms, &Symbol{addr: sym.Value, size: sym.Size, name: name})
+			syms = append(syms, &Symbol{addr: sym.Value, size: sym.Size, name: stripDotted(sym.Name)})
 		}
 	}
 	sort.Sort(syms)
@@ -82,7 +84,7 @@ func LoadSymsMap(path string) Symbols {
 		name, err := r.ReadSlice('\n')
 		check(err)
 
-		syms = append(syms, &Symbol{addr, size, string(name[:len(name)-1])})
+		syms = append(syms, &Symbol{addr, size, stripDotted(string(name[:len(name)-1]))})
 	}
 	return syms
 }
