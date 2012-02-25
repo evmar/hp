@@ -16,11 +16,14 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"runtime/pprof"
 )
+
+var flag_profile *bool = flag.Bool("profile", false, "whether to profile hp itself")
 
 func CleanupStacks(profile *Profile, syms Symbols) map[uint64]string {
 	// Map of symbol name -> address for that symbol.
@@ -182,18 +185,24 @@ func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
 }
 
 func main() {
-	if false {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] binary profile\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	if len(flag.Args()) < 3 {
+		log.Fatalf("usage: %s binary profile", os.Args[0])
+	}
+	binaryPath := flag.Arg(1)
+	profilePath := flag.Arg(2)
+
+	if *flag_profile {
 		f, err := os.Create("goprof")
 		check(err)
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-
-	if len(os.Args) < 3 {
-		log.Fatalf("usage: %s binary profile", os.Args[0])
-	}
-	binaryPath := os.Args[1]
-	profilePath := os.Args[2]
 
 	profChan := make(chan *Profile)
 	go func() {
