@@ -132,6 +132,10 @@ func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
 	Sort(nodelist, func(n interface{}) int { return -n.(*Node).cum.InuseBytes })
 
 	fmt.Printf("digraph G {\n")
+	fmt.Printf("nodesep = 0.2\n")
+	fmt.Printf("ranksep = 0.3\n")
+	fmt.Printf("node [fontsize=9]\n")
+	fmt.Printf("edge [fontsize=8]\n")
 
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
@@ -164,7 +168,7 @@ func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
 		}
 		outdegree[edge.src]++
 		indegree[edge.dst]++
-		fmt.Printf("%d -> %d [label=%.1f]\n", edge.src.addr, edge.dst.addr, float32(edges[edge])/1024.0)
+		fmt.Printf("%d -> %d [label=\" %.1f\"]\n", edge.src.addr, edge.dst.addr, float32(edges[edge])/1024.0)
 	}
 
 	total := 0
@@ -177,7 +181,7 @@ func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
 		}
 		total += n.cur.InuseBytes
 		label := Label(p, n, d) + "\\n" + SizeLabel(p.header.InuseBytes, n.cur.InuseBytes, n.cum.InuseBytes)
-		fmt.Printf("%d [label=\"%s\",shape=box]\n", n.addr, label)
+		fmt.Printf("%d [label=\"%s\",shape=box,href=\"%d\"]\n", n.addr, label, n.addr)
 	}
 	log.Printf("total not shown: %.1fk", float32(missing)/1024.0)
 	log.Printf("total kept nodes: %.1fk", float32(total)/1024.0)
