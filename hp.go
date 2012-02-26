@@ -21,18 +21,26 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
+	"net/http"
 )
 
+var flag_http *string = flag.String("http", "", "http service address (e.g. ':8000')")
 var flag_profile *bool = flag.Bool("profile", false, "whether to profile hp itself")
 var flag_syms *string = flag.String("syms", "", "load symbols from file instead of binary")
 
-func CleanupStacks(profile *Profile, syms Symbols) map[uint64]string {
+type state struct {
+	profile *Profile
+	names   map[uint64]string
+	demangler *Demangler
+}
+
+func (s *state) CleanupStacks(syms Symbols) map[uint64]string {
 	// Map of symbol name -> address for that symbol.
 	addrs := make(map[string]uint64)
 	// Same map, in reverse.
 	names := make(map[uint64]string)
 
-	for _, stack := range profile.stacks {
+	for _, stack := range s.profile.stacks {
 		var last uint64
 		var newstack []uint64
 		for _, addr := range stack.Stack {
@@ -71,28 +79,30 @@ type Node struct {
 	cur, cum Stats
 }
 
-func Label(p *Profile, n *Node, d *Demangler) string {
+func (s *state) Label(n *Node) string {
 	label := n.name
 
 	if len(label) == 0 {
 		label = fmt.Sprintf("0x%x", n.addr)
-		e := p.maps.Search(n.addr)
+		e := s.profile.maps.Search(n.addr)
 		if e != nil {
 			label += fmt.Sprintf(" [%s]", e.path)
 		}
 	} else {
-		label = d.Demangle(label)
+		label = s.demangler.Demangle(label)
 		label = RemoveTypes(label)
 	}
 	return label
 }
 
-func SizeLabel(total, cur, cum int) string {
-	return fmt.Sprintf("%dk of %dk (%.1f%% of total)", cur/1024, cum/1024,
-		float32(cum)*100.0/float32(total))
+func (s *state) SizeLabel(n *Node) string {
+	cur := n.cur.InuseBytes
+	cum := n.cum.InuseBytes
+	frac := float32(cum) / float32(s.profile.header.InuseBytes)
+	return fmt.Sprintf("%dk of %dk (%.1f%% of total)", cur/1024, cum/1024, frac * 100.0)
 }
 
-func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
+func (s *state) GraphViz() {
 	type edge struct {
 		src, dst *Node
 	}
@@ -100,7 +110,7 @@ func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
 	edges := make(map[edge]int)
 
 	// Accumulate stats into nodes and edges.
-	for _, stack := range p.stacks {
+	for _, stack := range s.profile.stacks {
 		var last *Node
 		for _, addr := range stack.Stack {
 			if last != nil && addr == last.addr {
@@ -109,7 +119,7 @@ func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
 
 			node := nodes[addr]
 			if node == nil {
-				node = &Node{addr: addr, name: names[addr]}
+				node = &Node{addr: addr, name: s.names[addr]}
 				nodes[addr] = node
 			}
 
@@ -180,13 +190,18 @@ func GraphViz(p *Profile, names map[uint64]string, d *Demangler) {
 			continue
 		}
 		total += n.cur.InuseBytes
-		label := Label(p, n, d) + "\\n" + SizeLabel(p.header.InuseBytes, n.cur.InuseBytes, n.cum.InuseBytes)
+		label := s.Label(n) + "\\n" + s.SizeLabel(n)
 		fmt.Printf("%d [label=\"%s\",shape=box,href=\"%d\"]\n", n.addr, label, n.addr)
 	}
 	log.Printf("total not shown: %.1fk", float32(missing)/1024.0)
 	log.Printf("total kept nodes: %.1fk", float32(total)/1024.0)
 
 	fmt.Printf("}\n")
+}
+
+func (s *state) ServeHttp(addr string) {
+	//http.HandleFunc("/", frontPage)
+	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
 func main() {
@@ -246,12 +261,19 @@ func main() {
 	syms := <-symChan
 	profile := <-profChan
 
-	demangler := NewDemangler()
+	state := &state{
+		profile: profile,
+		demangler: NewDemangler(),
+	}
+	state.names = state.CleanupStacks(syms)
 
-	log.Printf("writing output...")
-
-	names := CleanupStacks(profile, syms)
-	GraphViz(profile, names, demangler)
+	if len(*flag_http) > 0 {
+		log.Printf("serving on %s", *flag_http)
+		state.ServeHttp(*flag_http)
+	} else {
+		log.Printf("writing output...")
+		state.GraphViz()
+	}
 
 	log.Printf("done")
 }
