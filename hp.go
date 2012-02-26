@@ -15,6 +15,7 @@
 package main
 
 import (
+	"os/exec"
 	"bufio"
 	"flag"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"os"
 	"runtime/pprof"
 	"net/http"
+	"io"
 )
 
 var flag_http *string = flag.String("http", "", "http service address (e.g. ':8000')")
@@ -102,7 +104,7 @@ func (s *state) SizeLabel(n *Node) string {
 	return fmt.Sprintf("%dk of %dk (%.1f%% of total)", cur/1024, cum/1024, frac * 100.0)
 }
 
-func (s *state) GraphViz() {
+func (s *state) GraphViz(w io.Writer) {
 	type edge struct {
 		src, dst *Node
 	}
@@ -141,11 +143,11 @@ func (s *state) GraphViz() {
 	}
 	Sort(nodelist, func(n interface{}) int { return -n.(*Node).cum.InuseBytes })
 
-	fmt.Printf("digraph G {\n")
-	fmt.Printf("nodesep = 0.2\n")
-	fmt.Printf("ranksep = 0.3\n")
-	fmt.Printf("node [fontsize=9]\n")
-	fmt.Printf("edge [fontsize=8]\n")
+	fmt.Fprintf(w, "digraph G {\n")
+	fmt.Fprintf(w, "nodesep = 0.2\n")
+	fmt.Fprintf(w, "ranksep = 0.3\n")
+	fmt.Fprintf(w, "node [fontsize=9]\n")
+	fmt.Fprintf(w, "edge [fontsize=8]\n")
 
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
@@ -178,7 +180,7 @@ func (s *state) GraphViz() {
 		}
 		outdegree[edge.src]++
 		indegree[edge.dst]++
-		fmt.Printf("%d -> %d [label=\" %.1f\"]\n", edge.src.addr, edge.dst.addr, float32(edges[edge])/1024.0)
+		fmt.Fprintf(w, "%d -> %d [label=\" %.1f\"]\n", edge.src.addr, edge.dst.addr, float32(edges[edge])/1024.0)
 	}
 
 	total := 0
@@ -191,16 +193,33 @@ func (s *state) GraphViz() {
 		}
 		total += n.cur.InuseBytes
 		label := s.Label(n) + "\\n" + s.SizeLabel(n)
-		fmt.Printf("%d [label=\"%s\",shape=box,href=\"%d\"]\n", n.addr, label, n.addr)
+		fmt.Fprintf(w, "%d [label=\"%s\",shape=box,href=\"%d\"]\n", n.addr, label, n.addr)
 	}
 	log.Printf("total not shown: %.1fk", float32(missing)/1024.0)
 	log.Printf("total kept nodes: %.1fk", float32(total)/1024.0)
 
-	fmt.Printf("}\n")
+	fmt.Fprintf(w, "}\n")
 }
 
 func (s *state) ServeHttp(addr string) {
-	//http.HandleFunc("/", frontPage)
+	http.HandleFunc("/t.png", func(w http.ResponseWriter, req *http.Request) {
+		http.ServeFile(w, req, "t.png")
+	})
+	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/" {
+			http.NotFound(w, req)
+		} else {
+			http.ServeFile(w, req, "page.html")
+		}
+	})
+	go func() {
+		url := addr
+		if url[0] == ':' {
+			url = "http://localhost" + url
+		}
+		log.Printf("spawning browser on %s", url)
+		exec.Command("gnome-open", url).Start()
+	}()
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
@@ -224,14 +243,19 @@ func main() {
 	} else {
 		binaryPath, profilePath = flag.Arg(0), flag.Arg(1)
 	}
-	log.Printf("%q %q %q", symsPath, binaryPath, profilePath)
 
 	if len(profilePath) == 0 {
 		log.Fatalf("usage: %s binary profile", os.Args[0])
 	}
 
+	noLoad := true
+
 	profChan := make(chan *Profile)
 	go func() {
+		if noLoad {
+			profChan <- nil
+			return
+		}
 		log.Printf("reading profile from %s", profilePath)
 		f, err := os.Open(profilePath)
 		check(err)
@@ -251,6 +275,10 @@ func main() {
 		}()
 	} else {
 		go func() {
+			if noLoad {
+				symChan <- nil
+				return
+			}
 			log.Printf("reading symbol map from %s", symsPath)
 			syms := LoadSymsMap(symsPath)
 			log.Printf("loaded %d syms", len(syms))
@@ -265,14 +293,18 @@ func main() {
 		profile: profile,
 		demangler: NewDemangler(),
 	}
-	state.names = state.CleanupStacks(syms)
+	if noLoad {
+		syms = syms
+	} else {
+		state.names = state.CleanupStacks(syms)
+	}
 
 	if len(*flag_http) > 0 {
 		log.Printf("serving on %s", *flag_http)
 		state.ServeHttp(*flag_http)
 	} else {
 		log.Printf("writing output...")
-		state.GraphViz()
+		state.GraphViz(os.Stdout)
 	}
 
 	log.Printf("done")
