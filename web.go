@@ -26,7 +26,7 @@ import (
 func (s *state) JS() []byte {
 	js := make(map[string]interface{})
 	js["total"] = s.Profile.Header.InuseBytes/1024
-	js["sizes"] = s.graph.nodeSizes
+	js["sizes"] = s.Graph.NodeSizes
 	jsbytes, err := json.Marshal(js)
 	check(err)
 	return jsbytes
@@ -34,10 +34,17 @@ func (s *state) JS() []byte {
 
 func (s *state) ServeHttp(addr string) {
 	// This seems pretty suboptimal, but I can't figure out how else
-	// to define a function before loading a template.
+	// to define functions before loading a template.
 	tmpl := template.Must(template.New("page").Funcs(template.FuncMap{
 		"kb": func(n int) string {
 			return fmt.Sprintf("%dkb", n/1024)
+		},
+		"firstn": func(n int, xs []int) []int {
+			return xs[:n]
+		},
+		"json": func(x interface{}) (string, error) {
+			js, err := json.Marshal(x)
+			return string(js), err
 		},
 	}).ParseFiles("page.html")).Lookup("page.html")
 

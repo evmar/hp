@@ -22,6 +22,9 @@ body {
 }
 </style>
 <body>
+<script>
+  var kNodeSizes = {{.Graph.NodeSizes | firstn 500 | json}};
+</script>
 <div id=control>
   {{with .Profile.Header}}
   total allocated bytes: {{.InuseBytes | kb}} <br>

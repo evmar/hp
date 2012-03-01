@@ -32,7 +32,7 @@ var flag_syms *string = flag.String("syms", "", "load symbols from file instead 
 type state struct {
 	Profile   *Profile
 	demangler *Demangler
-	graph     *graph
+	Graph     *graph
 }
 
 type Node struct {
@@ -45,7 +45,7 @@ type edge struct {
 }
 type graph struct {
 	nodes map[uint64]*Node
-	nodeSizes []int
+	NodeSizes []int
 	edges map[edge]int
 }
 
@@ -154,11 +154,11 @@ func (g *graph) Analyze(stacks []*Stack, names map[uint64]string) {
 		nodeSizes[i], nodeSizes[j] = nodeSizes[j], nodeSizes[i]
 	}
 
-	g.nodeSizes = nodeSizes
+	g.NodeSizes = nodeSizes
 }
 
 func (s *state) GraphViz(w io.Writer) {
-	g := s.graph
+	g := s.Graph
 
 	fmt.Fprintf(w, "digraph G {\n")
 	fmt.Fprintf(w, "nodesep = 0.2\n")
@@ -169,7 +169,7 @@ func (s *state) GraphViz(w io.Writer) {
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
 	nodeKeepCount := 100
-	nodeKeepThreshold := g.nodeSizes[nodeKeepCount]
+	nodeKeepThreshold := g.NodeSizes[nodeKeepCount]
 	log.Printf("keeping %d nodes with cumulative >= %dk", nodeKeepCount, nodeKeepThreshold/1024)
 	for _, n := range g.nodes {
 		if n.cum.InuseBytes >= nodeKeepThreshold {
@@ -297,11 +297,11 @@ func main() {
 		names = CleanupStacks(state.Profile.stacks, syms)
 	}
 
-	state.graph = &graph{
+	state.Graph = &graph{
 		nodes: make(map[uint64]*Node),
 		edges: make(map[edge]int),
 	}
-	state.graph.Analyze(profile.stacks, names)
+	state.Graph.Analyze(profile.stacks, names)
 
 	if len(*flag_http) > 0 {
 		log.Printf("serving on %s", *flag_http)
