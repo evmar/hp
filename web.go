@@ -19,12 +19,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"log"
-	//"text/template"
+	"fmt"
+	"text/template"
 )
 
 func (s *state) JS() []byte {
 	js := make(map[string]interface{})
-	js["total"] = s.profile.header.InuseBytes/1024
+	js["total"] = s.Profile.Header.InuseBytes/1024
 	js["sizes"] = s.graph.nodeSizes
 	jsbytes, err := json.Marshal(js)
 	check(err)
@@ -32,10 +33,14 @@ func (s *state) JS() []byte {
 }
 
 func (s *state) ServeHttp(addr string) {
-	http.HandleFunc("/state", func(w http.ResponseWriter, req *http.Request) {
-		_, err := w.Write(s.JS())
-		check(err)
-	})
+	// This seems pretty suboptimal, but I can't figure out how else
+	// to define a function before loading a template.
+	tmpl := template.Must(template.New("page").Funcs(template.FuncMap{
+		"kb": func(n int) string {
+			return fmt.Sprintf("%dkb", n/1024)
+		},
+	}).ParseFiles("page.html")).Lookup("page.html")
+
 	http.HandleFunc("/t.png", func(w http.ResponseWriter, req *http.Request) {
 		http.ServeFile(w, req, "t.png")
 	})
@@ -43,7 +48,9 @@ func (s *state) ServeHttp(addr string) {
 		if req.URL.Path != "/" {
 			http.NotFound(w, req)
 		} else {
-			http.ServeFile(w, req, "page.html")
+			err := tmpl.Execute(w, s)
+			check(err)
+			//http.ServeFile(w, req, "page.html")
 		}
 	})
 	go func() {

@@ -30,7 +30,7 @@ var flag_profile *bool = flag.Bool("profile", false, "whether to profile hp itse
 var flag_syms *string = flag.String("syms", "", "load symbols from file instead of binary")
 
 type state struct {
-	profile   *Profile
+	Profile   *Profile
 	demangler *Demangler
 	graph     *graph
 }
@@ -93,7 +93,7 @@ func (s *state) Label(n *Node) string {
 
 	if len(label) == 0 {
 		label = fmt.Sprintf("0x%x", n.addr)
-		e := s.profile.maps.Search(n.addr)
+		e := s.Profile.maps.Search(n.addr)
 		if e != nil {
 			label += fmt.Sprintf(" [%s]", e.path)
 		}
@@ -107,7 +107,7 @@ func (s *state) Label(n *Node) string {
 func (s *state) SizeLabel(n *Node) string {
 	cur := n.cur.InuseBytes
 	cum := n.cum.InuseBytes
-	frac := float32(cum) / float32(s.profile.header.InuseBytes)
+	frac := float32(cum) / float32(s.Profile.Header.InuseBytes)
 	return fmt.Sprintf("%dk of %dk (%.1f%% of total)", cur/1024, cum/1024, frac * 100.0)
 }
 
@@ -287,14 +287,14 @@ func main() {
 	profile := <-profChan
 
 	state := &state{
-		profile: profile,
+		Profile: profile,
 		demangler: NewDemangler(),
 	}
 	var names map[uint64]string
 	if noLoad {
 		syms = syms
 	} else {
-		names = CleanupStacks(state.profile.stacks, syms)
+		names = CleanupStacks(state.Profile.stacks, syms)
 	}
 
 	state.graph = &graph{

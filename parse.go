@@ -61,7 +61,7 @@ func (m Maps) Search(addr uint64) *MapEntry {
 }
 
 type Profile struct {
-	header *Stats
+	Header *Stats
 	stacks []*Stack
 	maps   Maps
 }
@@ -110,7 +110,7 @@ func ParseHeap(r *bufio.Reader) *Profile {
 	profile := &Profile{}
 
 	header, _ := parseStats(line)
-	profile.header = header
+	profile.Header = header
 
 	mapped_section := []byte("MAPPED_LIBRARIES:")
 	for {
