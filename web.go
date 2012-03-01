@@ -23,15 +23,6 @@ import (
 	"text/template"
 )
 
-func (s *state) JS() []byte {
-	js := make(map[string]interface{})
-	js["total"] = s.Profile.Header.InuseBytes/1024
-	js["sizes"] = s.Graph.NodeSizes
-	jsbytes, err := json.Marshal(js)
-	check(err)
-	return jsbytes
-}
-
 func (s *state) ServeHttp(addr string) {
 	// This seems pretty suboptimal, but I can't figure out how else
 	// to define functions before loading a template.
