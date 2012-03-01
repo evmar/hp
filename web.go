@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"log"
+	//"text/template"
 )
 
 func (s *state) JS() []byte {
@@ -27,10 +28,15 @@ func (s *state) JS() []byte {
 	js["sizes"] = s.nodeSizes
 	jsbytes, err := json.Marshal(js)
 	check(err)
+	log.Print(js)
 	return jsbytes
 }
 
 func (s *state) ServeHttp(addr string) {
+	http.HandleFunc("/state", func(w http.ResponseWriter, req *http.Request) {
+		_, err := w.Write(s.JS())
+		check(err)
+	})
 	http.HandleFunc("/t.png", func(w http.ResponseWriter, req *http.Request) {
 		http.ServeFile(w, req, "t.png")
 	})
