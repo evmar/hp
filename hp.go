@@ -30,19 +30,32 @@ var flag_profile *bool = flag.Bool("profile", false, "whether to profile hp itse
 var flag_syms *string = flag.String("syms", "", "load symbols from file instead of binary")
 
 type state struct {
-	profile *Profile
-	nodeSizes []int
-	names   map[uint64]string
+	profile   *Profile
 	demangler *Demangler
+	graph     *graph
 }
 
-func (s *state) CleanupStacks(syms Symbols) map[uint64]string {
+type Node struct {
+	addr     uint64
+	name     string
+	cur, cum Stats
+}
+type edge struct {
+	src, dst *Node
+}
+type graph struct {
+	nodes map[uint64]*Node
+	nodeSizes []int
+	edges map[edge]int
+}
+
+func CleanupStacks(stacks []*Stack, syms Symbols) map[uint64]string {
 	// Map of symbol name -> address for that symbol.
 	addrs := make(map[string]uint64)
 	// Same map, in reverse.
 	names := make(map[uint64]string)
 
-	for _, stack := range s.profile.stacks {
+	for _, stack := range stacks {
 		var last uint64
 		var newstack []uint64
 		for _, addr := range stack.Stack {
@@ -75,12 +88,6 @@ func (s *state) CleanupStacks(syms Symbols) map[uint64]string {
 	return names
 }
 
-type Node struct {
-	addr     uint64
-	name     string
-	cur, cum Stats
-}
-
 func (s *state) Label(n *Node) string {
 	label := n.name
 
@@ -104,10 +111,35 @@ func (s *state) SizeLabel(n *Node) string {
 	return fmt.Sprintf("%dk of %dk (%.1f%% of total)", cur/1024, cum/1024, frac * 100.0)
 }
 
-func (s *state) Analyze(nodes map[uint64]*Node) {
+func (g *graph) Analyze(stacks []*Stack, names map[uint64]string) {
+	// Accumulate stats into nodes and edges.
+	for _, stack := range stacks {
+		var last *Node
+		for _, addr := range stack.Stack {
+			if last != nil && addr == last.addr {
+				continue // Ignore loops
+			}
+
+			node := g.nodes[addr]
+			if node == nil {
+				node = &Node{addr: addr, name: names[addr]}
+				g.nodes[addr] = node
+			}
+
+			if last == nil {
+				node.cur.Add(stack.Stats)
+			} else {
+				g.edges[edge{node, last}] += stack.Stats.InuseBytes
+			}
+			node.cum.Add(stack.Stats)
+
+			last = node
+		}
+	}
+
 	// Collect node sizes.
-	nodeSizes := make([]int, 0, len(nodes))
-	for _, n := range nodes {
+	nodeSizes := make([]int, 0, len(g.nodes))
+	for _, n := range g.nodes {
 		size := n.cum.InuseBytes
 		if size > 0 {
 			nodeSizes = append(nodeSizes, size)
@@ -122,42 +154,11 @@ func (s *state) Analyze(nodes map[uint64]*Node) {
 		nodeSizes[i], nodeSizes[j] = nodeSizes[j], nodeSizes[i]
 	}
 
-	s.nodeSizes = nodeSizes
+	g.nodeSizes = nodeSizes
 }
 
 func (s *state) GraphViz(w io.Writer) {
-	type edge struct {
-		src, dst *Node
-	}
-	nodes := make(map[uint64]*Node)
-	edges := make(map[edge]int)
-
-	// Accumulate stats into nodes and edges.
-	for _, stack := range s.profile.stacks {
-		var last *Node
-		for _, addr := range stack.Stack {
-			if last != nil && addr == last.addr {
-				continue // Ignore loops
-			}
-
-			node := nodes[addr]
-			if node == nil {
-				node = &Node{addr: addr, name: s.names[addr]}
-				nodes[addr] = node
-			}
-
-			if last == nil {
-				node.cur.Add(stack.Stats)
-			} else {
-				edges[edge{node, last}] += stack.Stats.InuseBytes
-			}
-			node.cum.Add(stack.Stats)
-
-			last = node
-		}
-	}
-
-	s.Analyze(nodes)
+	g := s.graph
 
 	fmt.Fprintf(w, "digraph G {\n")
 	fmt.Fprintf(w, "nodesep = 0.2\n")
@@ -168,28 +169,28 @@ func (s *state) GraphViz(w io.Writer) {
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
 	nodeKeepCount := 100
-	nodeKeepThreshold := s.nodeSizes[nodeKeepCount]
+	nodeKeepThreshold := g.nodeSizes[nodeKeepCount]
 	log.Printf("keeping %d nodes with cumulative >= %dk", nodeKeepCount, nodeKeepThreshold/1024)
-	for _, n := range nodes {
+	for _, n := range g.nodes {
 		if n.cum.InuseBytes >= nodeKeepThreshold {
 			keptNodes[n] = true
 		}
 	}
 
 	// Order edges that reference selected nodes by size.
-	edgelist := make([]interface{}, 0, len(edges))
-	for e, _ := range edges {
+	edgelist := make([]interface{}, 0, len(g.edges))
+	for e, _ := range g.edges {
 		if keptNodes[e.src] && keptNodes[e.dst] {
 			edgelist = append(edgelist, e)
 		}
 	}
-	Sort(edgelist, func(e interface{}) int { return -edges[e.(edge)] })
+	Sort(edgelist, func(e interface{}) int { return -g.edges[e.(edge)] })
 
 	indegree := make(map[*Node]int)
 	outdegree := make(map[*Node]int)
 	for _, e := range edgelist {
 		edge := e.(edge)
-		size := edges[edge]
+		size := g.edges[edge]
 
 		if indegree[edge.dst] == 0 {
 			// Keep at least one edge for each dest.
@@ -198,7 +199,7 @@ func (s *state) GraphViz(w io.Writer) {
 		}
 		outdegree[edge.src]++
 		indegree[edge.dst]++
-		fmt.Fprintf(w, "%d -> %d [label=\" %.1f\"]\n", edge.src.addr, edge.dst.addr, float32(edges[edge])/1024.0)
+		fmt.Fprintf(w, "%d -> %d [label=\" %.1f\"]\n", edge.src.addr, edge.dst.addr, float32(g.edges[edge])/1024.0)
 	}
 
 	total := 0
@@ -289,11 +290,18 @@ func main() {
 		profile: profile,
 		demangler: NewDemangler(),
 	}
+	var names map[uint64]string
 	if noLoad {
 		syms = syms
 	} else {
-		state.names = state.CleanupStacks(syms)
+		names = CleanupStacks(state.profile.stacks, syms)
 	}
+
+	state.graph = &graph{
+		nodes: make(map[uint64]*Node),
+		edges: make(map[edge]int),
+	}
+	state.graph.Analyze(profile.stacks, names)
 
 	if len(*flag_http) > 0 {
 		log.Printf("serving on %s", *flag_http)

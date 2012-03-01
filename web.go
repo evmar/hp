@@ -25,10 +25,9 @@ import (
 func (s *state) JS() []byte {
 	js := make(map[string]interface{})
 	js["total"] = s.profile.header.InuseBytes/1024
-	js["sizes"] = s.nodeSizes
+	js["sizes"] = s.graph.nodeSizes
 	jsbytes, err := json.Marshal(js)
 	check(err)
-	log.Print(js)
 	return jsbytes
 }
 
