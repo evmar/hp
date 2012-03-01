@@ -3,5 +3,5 @@ rule compile
 rule link
   command = go tool 6l -o $out $in
 
-build hp.6: compile hp.go parse.go mangle.go util.go syms.go
+build hp.6: compile hp.go parse.go mangle.go util.go syms.go web.go
 build hp: link hp.6

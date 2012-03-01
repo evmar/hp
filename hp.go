@@ -15,15 +15,14 @@
 package main
 
 import (
-	"os/exec"
 	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"runtime/pprof"
-	"net/http"
 	"io"
+	"sort"
 )
 
 var flag_http *string = flag.String("http", "", "http service address (e.g. ':8000')")
@@ -32,6 +31,7 @@ var flag_syms *string = flag.String("syms", "", "load symbols from file instead 
 
 type state struct {
 	profile *Profile
+	nodeSizes []int
 	names   map[uint64]string
 	demangler *Demangler
 }
@@ -104,6 +104,27 @@ func (s *state) SizeLabel(n *Node) string {
 	return fmt.Sprintf("%dk of %dk (%.1f%% of total)", cur/1024, cum/1024, frac * 100.0)
 }
 
+func (s *state) Analyze(nodes map[uint64]*Node) {
+	// Collect node sizes.
+	nodeSizes := make([]int, 0, len(nodes))
+	for _, n := range nodes {
+		size := n.cum.InuseBytes
+		if size > 0 {
+			nodeSizes = append(nodeSizes, size)
+		}
+	}
+
+	sort.Ints(nodeSizes)
+
+	// Reverse to descending order.
+	for i := 0; i < len(nodeSizes)/2; i++ {
+		j := len(nodeSizes)-i-1
+		nodeSizes[i], nodeSizes[j] = nodeSizes[j], nodeSizes[i]
+	}
+
+	s.nodeSizes = nodeSizes
+}
+
 func (s *state) GraphViz(w io.Writer) {
 	type edge struct {
 		src, dst *Node
@@ -136,12 +157,7 @@ func (s *state) GraphViz(w io.Writer) {
 		}
 	}
 
-	// Order nodes by size.
-	nodelist := make([]interface{}, 0, len(nodes))
-	for _, n := range nodes {
-		nodelist = append(nodelist, n)
-	}
-	Sort(nodelist, func(n interface{}) int { return -n.(*Node).cum.InuseBytes })
+	s.Analyze(nodes)
 
 	fmt.Fprintf(w, "digraph G {\n")
 	fmt.Fprintf(w, "nodesep = 0.2\n")
@@ -152,10 +168,12 @@ func (s *state) GraphViz(w io.Writer) {
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
 	nodeKeepCount := 100
-	log.Printf("keeping nodes with cumulative >= %.1fk", float32(nodelist[nodeKeepCount].(*Node).cum.InuseBytes)/1024.0)
-	for _, xn := range nodelist[:nodeKeepCount] {
-		n := xn.(*Node)
-		keptNodes[n] = true
+	nodeKeepThreshold := s.nodeSizes[nodeKeepCount]
+	log.Printf("keeping %d nodes with cumulative >= %dk", nodeKeepCount, nodeKeepThreshold/1024)
+	for _, n := range nodes {
+		if n.cum.InuseBytes >= nodeKeepThreshold {
+			keptNodes[n] = true
+		}
 	}
 
 	// Order edges that reference selected nodes by size.
@@ -201,28 +219,6 @@ func (s *state) GraphViz(w io.Writer) {
 	fmt.Fprintf(w, "}\n")
 }
 
-func (s *state) ServeHttp(addr string) {
-	http.HandleFunc("/t.png", func(w http.ResponseWriter, req *http.Request) {
-		http.ServeFile(w, req, "t.png")
-	})
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path != "/" {
-			http.NotFound(w, req)
-		} else {
-			http.ServeFile(w, req, "page.html")
-		}
-	})
-	go func() {
-		url := addr
-		if url[0] == ':' {
-			url = "http://localhost" + url
-		}
-		log.Printf("spawning browser on %s", url)
-		exec.Command("gnome-open", url).Start()
-	}()
-	log.Fatal(http.ListenAndServe(addr, nil))
-}
-
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] binary profile\n", os.Args[0])
@@ -248,7 +244,7 @@ func main() {
 		log.Fatalf("usage: %s binary profile", os.Args[0])
 	}
 
-	noLoad := true
+	noLoad := false
 
 	profChan := make(chan *Profile)
 	go func() {
