@@ -47,6 +47,11 @@ type graph struct {
 	nodes map[uint64]*Node
 	NodeSizes []int
 	edges map[edge]int
+	Params    *params
+}
+
+type params struct {
+	NodeKeepCount int
 }
 
 func CleanupStacks(stacks []*Stack, syms Symbols) map[uint64]string {
@@ -157,8 +162,9 @@ func (g *graph) Analyze(stacks []*Stack, names map[uint64]string) {
 	g.NodeSizes = nodeSizes
 }
 
-func (s *state) GraphViz(w io.Writer) {
+func (s *state) GraphViz(w io.Writer, params *params) {
 	g := s.Graph
+	g.Params = params
 
 	fmt.Fprintf(w, "digraph G {\n")
 	fmt.Fprintf(w, "nodesep = 0.2\n")
@@ -168,11 +174,13 @@ func (s *state) GraphViz(w io.Writer) {
 
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
-	nodeKeepCount := 100
-	nodeKeepThreshold := g.NodeSizes[nodeKeepCount]
-	log.Printf("keeping %d nodes with cumulative >= %dk", nodeKeepCount, nodeKeepThreshold/1024)
+	nodeSizeThreshold := 0
+	if params.NodeKeepCount < len(g.NodeSizes) {
+		nodeSizeThreshold = g.NodeSizes[params.NodeKeepCount]
+	}
+	log.Printf("keeping %d nodes with cumulative >= %dk", params.NodeKeepCount, nodeSizeThreshold/1024)
 	for _, n := range g.nodes {
-		if n.cum.InuseBytes >= nodeKeepThreshold {
+		if n.cum.InuseBytes >= nodeSizeThreshold {
 			keptNodes[n] = true
 		}
 	}
@@ -308,7 +316,9 @@ func main() {
 		state.ServeHttp(*flag_http)
 	} else {
 		log.Printf("writing output...")
-		state.GraphViz(os.Stdout)
+		state.GraphViz(os.Stdout, &params{
+			NodeKeepCount: 100,
+		})
 	}
 
 	log.Printf("done")
