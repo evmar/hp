@@ -23,6 +23,16 @@ import (
 	"text/template"
 )
 
+func (s *state) WritePng(params *params) {
+	cmd := exec.Command("dot", "-Tpng", "-ograph.png")
+	stdin, err := cmd.StdinPipe()
+	check(err)
+	check(cmd.Start())
+	s.GraphViz(stdin, params)
+	check(stdin.Close())
+	check(cmd.Wait())
+}
+
 func (s *state) ServeHttp(addr string) {
 	// This seems pretty suboptimal, but I can't figure out how else
 	// to define functions before loading a template.
@@ -39,17 +49,26 @@ func (s *state) ServeHttp(addr string) {
 		},
 	}).ParseFiles("page.html")).Lookup("page.html")
 
-	http.HandleFunc("/t.png", func(w http.ResponseWriter, req *http.Request) {
-		http.ServeFile(w, req, "t.png")
+	http.HandleFunc("/graph.png", func(w http.ResponseWriter, req *http.Request) {
+		http.ServeFile(w, req, "graph.png")
 	})
+
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path != "/" {
 			http.NotFound(w, req)
-		} else {
-			err := tmpl.Execute(w, s)
-			check(err)
-			//http.ServeFile(w, req, "page.html")
+			return
 		}
+
+		if req.Method == "POST" {
+			s.WritePng(&params{
+				NodeKeepCount: 200,
+			})
+			http.Redirect(w, req, "/", 204)
+			return
+		}
+
+		err := tmpl.Execute(w, s)
+		check(err)
 	})
 	go func() {
 		url := addr

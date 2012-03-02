@@ -30,14 +30,14 @@ body {
   total allocated bytes: {{.InuseBytes | kb}} <br>
   {{end}}
 
-  <form>
+  <form method=post>
   show nodes &gt; <input name=node size=2>kb<br>
   show edges &gt; <input name=edge size=2>kb<br>
   <input type=submit value=render>
   </form>
 </div>
 <div id=display>
-  <img src=t.png>
+  <img src=graph.png>
 </div>
 <script>
 var display = document.getElementById('display');
