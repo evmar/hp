@@ -53,17 +53,6 @@ func (r *stringReader) ReadN(n int) (string, error) {
 	return str, nil
 }
 
-func (r *mr) MustRead(expected string) error {
-	buf, err := r.ReadN(len(expected))
-	if err != nil {
-		return err
-	}
-	if string(buf) != expected {
-		return fmt.Errorf("expected '%s', got '%s'", expected, buf)
-	}
-	return nil
-}
-
 type mr struct {
 	*stringReader
 	output string
@@ -229,9 +218,13 @@ func (r *mr) ReadNestedName() (string, error) {
 }
 
 func (r *mr) demangle(name string) (string, string, error) {
-	err := r.MustRead("_Z")
+	header, err := r.ReadN(2)
 	if err != nil {
 		return "", "", err
+	}
+	if header != "_Z" {
+		// Nothing to demangle.
+		return name, "", nil
 	}
 
 	b, err := r.ReadByte()
@@ -266,7 +259,7 @@ func (d *LinuxDemangler) Demangle(name string) (string, error) {
 	}
 	out, _, err := mr.demangle(name)
 	if err != nil {
-		return "", fmt.Errorf("near '%s': %s", mr.stringReader.input[mr.stringReader.ofs:], err)
+		return "", fmt.Errorf("demangling '%s' near '%s': %s", name, mr.stringReader.input[mr.stringReader.ofs:], err)
 	}
 	return out, nil
 }
