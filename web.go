@@ -15,13 +15,32 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"encoding/json"
 	"net/http"
 	"log"
 	"fmt"
 	"text/template"
+	"runtime"
 )
+
+func SpawnBrowser(url string) {
+	browser := os.Getenv("BROWSER")
+	if len(browser) == 0 && runtime.GOOS == "darwin" {
+		// Use default system browser on Mac OS.
+		browser = "open"
+	}
+	if len(browser) > 0 {
+		go func() {
+			log.Printf("spawning browser on %s", url)
+			exec.Command(browser, url).Start()
+		}()
+	} else {
+		log.Printf("set $BROWSER to spawn browser")
+	}
+
+}
 
 func (s *state) WritePng(params *params) {
 	cmd := exec.Command("dot", "-Tpng", "-ograph.png")
@@ -70,13 +89,11 @@ func (s *state) ServeHttp(addr string) {
 		err := tmpl.Execute(w, s)
 		check(err)
 	})
-	go func() {
-		url := addr
-		if url[0] == ':' {
-			url = "http://localhost" + url
-		}
-		log.Printf("spawning browser on %s", url)
-		exec.Command("gnome-open", url).Start()
-	}()
+
+	url := addr
+	if url[0] == ':' {
+		url = "http://localhost" + url
+	}
+	SpawnBrowser(url)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
