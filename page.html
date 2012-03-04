@@ -32,7 +32,7 @@ body {
 
   <form method=post>
   show nodes &gt; <input name=node size=2>kb<br>
-  keep <input name=nodecount size=2> nodes<br>
+  keep <input name=nodecount size=2 value={{.Params.NodeKeepCount}}> nodes<br>
   show edges &gt; <input name=edge size=2>kb<br>
   <input type=submit value=render>
   </form>

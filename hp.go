@@ -35,6 +35,7 @@ type state struct {
 	Profile   *Profile
 	demangler Demangler
 	Graph     *graph
+	Params    *params
 }
 
 type Node struct {
@@ -49,7 +50,6 @@ type graph struct {
 	nodes map[uint64]*Node
 	NodeSizes []int
 	edges map[edge]int
-	Params    *params
 }
 
 type params struct {
@@ -169,9 +169,8 @@ func (g *graph) Analyze(stacks []*Stack, names map[uint64]string) {
 	g.NodeSizes = nodeSizes
 }
 
-func (s *state) GraphViz(w io.Writer, params *params) {
+func (s *state) GraphViz(w io.Writer) {
 	g := s.Graph
-	g.Params = params
 
 	fmt.Fprintf(w, "digraph G {\n")
 	fmt.Fprintf(w, "nodesep = 0.2\n")
@@ -185,10 +184,10 @@ func (s *state) GraphViz(w io.Writer, params *params) {
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
 	nodeSizeThreshold := 0
-	if params.NodeKeepCount < len(g.NodeSizes) {
-		nodeSizeThreshold = g.NodeSizes[params.NodeKeepCount]
+	if s.Params.NodeKeepCount < len(g.NodeSizes) {
+		nodeSizeThreshold = g.NodeSizes[s.Params.NodeKeepCount]
 	}
-	log.Printf("keeping %d nodes with cumulative >= %dk", params.NodeKeepCount, nodeSizeThreshold/1024)
+	log.Printf("keeping %d nodes with cumulative >= %dk", s.Params.NodeKeepCount, nodeSizeThreshold/1024)
 	for _, n := range g.nodes {
 		if n.cum.InuseBytes >= nodeSizeThreshold {
 			keptNodes[n] = true
@@ -325,15 +324,16 @@ func main() {
 		edges: make(map[edge]int),
 	}
 	state.Graph.Analyze(profile.stacks, names)
+	state.Params = &params{
+		NodeKeepCount: 100,
+	}
 
 	if len(*flag_http) > 0 {
 		log.Printf("serving on %s", *flag_http)
 		state.ServeHttp(*flag_http)
 	} else {
 		log.Printf("writing output...")
-		state.GraphViz(os.Stdout, &params{
-			NodeKeepCount: 100,
-		})
+		state.GraphViz(os.Stdout)
 	}
 
 	log.Printf("done")

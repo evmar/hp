@@ -43,12 +43,12 @@ func SpawnBrowser(url string) {
 
 }
 
-func (s *state) WritePng(params *params) {
+func (s *state) WritePng() {
 	cmd := exec.Command("dot", "-Tpng", "-ograph.png")
 	stdin, err := cmd.StdinPipe()
 	check(err)
 	check(cmd.Start())
-	s.GraphViz(stdin, params)
+	s.GraphViz(stdin)
 	check(stdin.Close())
 	check(cmd.Wait())
 }
@@ -86,10 +86,11 @@ func (s *state) ServeHttp(addr string) {
 				check(err)
 				nodeCount = int(nc)
 			}
-			s.WritePng(&params{
+			s.Params = &params{
 				NodeKeepCount: nodeCount,
-			})
-			http.Redirect(w, req, "/", 204)
+			}
+			s.WritePng()
+			http.Redirect(w, req, "/", 303)
 			return
 		}
 
