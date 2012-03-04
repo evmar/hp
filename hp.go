@@ -105,7 +105,8 @@ func (s *state) Label(n *Node) string {
 			label += fmt.Sprintf(" [%s]", e.path)
 		}
 	} else {
-		label, err := s.demangler.Demangle(label)
+		var err error
+		label, err = s.demangler.Demangle(label)
 		check(err)
 		label = RemoveTypes(label)
 		if len(label) > 60 {
