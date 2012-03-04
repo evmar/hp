@@ -242,6 +242,7 @@ func (r *mr) demangle(name string) error {
 		r.Write(fullname)
 	default:
 		if '0' <= b && b <= '9' {
+			r.UnreadByte()
 			name, err := r.ReadSourceName()
 			if err != nil {
 				return err
