@@ -38,8 +38,9 @@ func test() {
 		"_ZNK3gfx17PlatformFontPango10DeriveFontEii",
 		"_ZN10extensions16SettingsFrontendC2ERK13scoped_refptrINS_22SettingsStorageFactoryEEP7Profile",
 		"_ZNSt8_Rb_treeISsSt4pairIKSsPN4base5ValueEESt10_Select1stIS5_ESt4lessISsESaIS5_EE16_M_insert_uniqueERKS5_",
+		"_Z11UTF16ToUTF8RKSbItN4base20string16_char_traitsESaItEE",
 	}
-	d := NewLinuxDemangler()
+	d := NewLinuxDemangler(true)
 	for _, sym := range syms {
 		fmt.Printf("%s\n", sym)
 		dem, err := d.Demangle(sym)
@@ -56,7 +57,7 @@ func output(buf []byte) {
 }
 
 func filt() {
-	d := NewLinuxDemangler()
+	d := NewLinuxDemangler(false)
 	re := regexp.MustCompile(`_Z[_a-zA-Z0-9]+`)
 	r := bufio.NewReader(os.Stdin)
 	for {
@@ -88,5 +89,5 @@ func filt() {
 }
 
 func main() {
-	filt()
+	test()
 }

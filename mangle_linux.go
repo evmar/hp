@@ -55,7 +55,8 @@ func (r *stringReader) ReadN(n int) (string, error) {
 
 type mr struct {
 	*stringReader
-	output string
+	output   string
+	leftover string
 }
 
 func (r *mr) Write(str string) {
@@ -217,53 +218,66 @@ func (r *mr) ReadNestedName() (string, error) {
 	panic("not reached")
 }
 
-func (r *mr) demangle(name string) (string, string, error) {
+func (r *mr) demangle(name string) error {
 	header, err := r.ReadN(2)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	if header != "_Z" {
 		// Nothing to demangle.
-		return name, "", nil
+		r.output = name
+		return nil
 	}
 
 	b, err := r.ReadByte()
 	if err != nil {
-		return "", "", err
+		return err
 	}
-	switch (b) {
+	switch b {
 	case 'N': // nested-name
 		fullname, err := r.ReadNestedName()
 		if err != nil {
-			return "", "", err
+			return err
 		}
 		r.Write(fullname)
-	}
-
-	leftover := ""
-	if r.stringReader.ofs < len(r.stringReader.input) {
-		leftover = r.stringReader.input[r.stringReader.ofs:]
+	default:
+		if '0' <= b && b <= '9' {
+			name, err := r.ReadSourceName()
+			if err != nil {
+				return err
+			}
+			r.Write(name)
+		}
 	}
 
 	if len(r.output) == 0 {
-		return "", "", fmt.Errorf("didn't produce any demangled text")
+		return fmt.Errorf("didn't produce any demangled text")
 	}
 
-	return r.output, leftover, nil
+	if r.stringReader.ofs < len(r.stringReader.input) {
+		r.leftover = r.stringReader.input[r.stringReader.ofs:]
+	}
+
+	return nil
 }
 
-type LinuxDemangler int
-func NewLinuxDemangler() *LinuxDemangler {
-	l := LinuxDemangler(0)
+type LinuxDemangler bool
+func NewLinuxDemangler(includeLeftover bool) *LinuxDemangler {
+	l := LinuxDemangler(includeLeftover)
 	return &l
 }
 func (d *LinuxDemangler) Demangle(name string) (string, error) {
 	mr := &mr{
 	stringReader: &stringReader{name, 0},
 	}
-	out, _, err := mr.demangle(name)
+	err := mr.demangle(name)
 	if err != nil {
 		return "", fmt.Errorf("demangling '%s' near '%s': %s", name, mr.stringReader.input[mr.stringReader.ofs:], err)
+	}
+
+	out := mr.output
+	if bool(*d) && len(mr.leftover) > 0 {
+		out += fmt.Sprintf(" (leftover %s)", mr.leftover)
 	}
 	return out, nil
 }

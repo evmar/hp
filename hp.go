@@ -308,7 +308,7 @@ func main() {
 		Profile: profile,
 	}
 	if *flags_builtin_demangle {
-		state.demangler = NewLinuxDemangler()
+		state.demangler = NewLinuxDemangler(false)
 	} else {
 		state.demangler = NewCppFilt()
 	}
