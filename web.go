@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"text/template"
 	"runtime"
+	"strconv"
 )
 
 func SpawnBrowser(url string) {
@@ -79,8 +80,14 @@ func (s *state) ServeHttp(addr string) {
 		}
 
 		if req.Method == "POST" {
+			nodeCount := 100
+			if ncs := req.FormValue("nodecount"); len(ncs) > 0 {
+				nc, err := strconv.ParseInt(ncs, 10, 16)
+				check(err)
+				nodeCount = int(nc)
+			}
 			s.WritePng(&params{
-				NodeKeepCount: 200,
+				NodeKeepCount: nodeCount,
 			})
 			http.Redirect(w, req, "/", 204)
 			return
