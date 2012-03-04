@@ -29,6 +29,7 @@ import (
 var flag_http *string = flag.String("http", "", "http service address (e.g. ':8000')")
 var flag_profile *bool = flag.Bool("profile", false, "whether to profile hp itself")
 var flag_syms *string = flag.String("syms", "", "load symbols from file instead of binary")
+var flags_builtin_demangle *bool = flag.Bool("builtin-demangler", false, "whether to use built-in linux demangler")
 
 type state struct {
 	Profile   *Profile
@@ -304,8 +305,13 @@ func main() {
 
 	state := &state{
 		Profile: profile,
-		demangler: NewCppFilt(),
 	}
+	if *flags_builtin_demangle {
+		state.demangler = NewLinuxDemangler()
+	} else {
+		state.demangler = NewCppFilt()
+	}
+
 	var names map[uint64]string
 	if noLoad {
 		syms = syms
