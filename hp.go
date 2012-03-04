@@ -32,7 +32,7 @@ var flag_syms *string = flag.String("syms", "", "load symbols from file instead 
 
 type state struct {
 	Profile   *Profile
-	demangler *Demangler
+	demangler Demangler
 	Graph     *graph
 }
 
@@ -104,7 +104,8 @@ func (s *state) Label(n *Node) string {
 			label += fmt.Sprintf(" [%s]", e.path)
 		}
 	} else {
-		label = s.demangler.Demangle(label)
+		label, err := s.demangler.Demangle(label)
+		check(err)
 		label = RemoveTypes(label)
 		if len(label) > 60 {
 			label = label[:60] + "..."
@@ -303,7 +304,7 @@ func main() {
 
 	state := &state{
 		Profile: profile,
-		demangler: NewDemangler(),
+		demangler: NewCppFilt(),
 	}
 	var names map[uint64]string
 	if noLoad {

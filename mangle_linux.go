@@ -228,30 +228,31 @@ func (r *mr) ReadNestedName() (string, error) {
 	panic("not reached")
 }
 
-func (r *mr) demangle(name string) (string, error) {
+func (r *mr) demangle(name string) (string, string, error) {
 	err := r.MustRead("_Z")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	b, err := r.ReadByte()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	switch (b) {
 	case 'N': // nested-name
 		fullname, err := r.ReadNestedName()
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		r.Write(fullname)
 	}
 
+	leftover := ""
 	if r.stringReader.ofs < len(r.stringReader.input) {
-		r.Write(fmt.Sprintf(" (leftover: %s)", r.stringReader.input[r.stringReader.ofs:]))
+		leftover = r.stringReader.input[r.stringReader.ofs:]
 	}
 
-	return r.output, nil
+	return r.output, leftover, nil
 }
 
 type LinuxDemangler int
@@ -263,7 +264,7 @@ func (d *LinuxDemangler) Demangle(name string) (string, error) {
 	mr := &mr{
 	stringReader: &stringReader{name, 0},
 	}
-	out, err := mr.demangle(name)
+	out, _, err := mr.demangle(name)
 	if err != nil {
 		return "", fmt.Errorf("near '%s': %s", mr.stringReader.input[mr.stringReader.ofs:], err)
 	}
