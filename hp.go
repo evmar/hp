@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
+	"runtime"
 	"io"
 	"sort"
 )
@@ -105,6 +106,9 @@ func (s *state) Label(n *Node) string {
 	} else {
 		label = s.demangler.Demangle(label)
 		label = RemoveTypes(label)
+		if len(label) > 60 {
+			label = label[:60] + "..."
+		}
 	}
 	return label
 }
@@ -169,8 +173,11 @@ func (s *state) GraphViz(w io.Writer, params *params) {
 	fmt.Fprintf(w, "digraph G {\n")
 	fmt.Fprintf(w, "nodesep = 0.2\n")
 	fmt.Fprintf(w, "ranksep = 0.3\n")
+	if runtime.GOOS == "darwin" {
+		fmt.Fprintf(w, "node [fontname = Menlo]\n")
+	}
 	fmt.Fprintf(w, "node [fontsize=9]\n")
-	fmt.Fprintf(w, "edge [fontsize=8]\n")
+	fmt.Fprintf(w, "edge [fontsize=9]\n")
 
 	// Select top N nodes.
 	keptNodes := make(map[*Node]bool)
