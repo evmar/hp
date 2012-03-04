@@ -245,6 +245,10 @@ func (r *mr) demangle(name string) (string, string, error) {
 		leftover = r.stringReader.input[r.stringReader.ofs:]
 	}
 
+	if len(r.output) == 0 {
+		return "", "", fmt.Errorf("didn't produce any demangled text")
+	}
+
 	return r.output, leftover, nil
 }
 
