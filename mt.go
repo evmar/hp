@@ -72,7 +72,6 @@ func filt() {
 		}
 		offsets := re.FindAllIndex(line, -1)
 		if offsets != nil {
-			fmt.Printf("%s\n", line)
 			last := 0
 			for _, match := range offsets {
 				start, end := match[0], match[1]
@@ -84,11 +83,10 @@ func filt() {
 			}
 			output(line[last:])
 			output([]byte("\n"))
-			output([]byte("\n"))
 		}
 	}
 }
 
 func main() {
-	test()
+	filt()
 }
