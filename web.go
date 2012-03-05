@@ -53,10 +53,10 @@ func (s *state) WritePng() {
 	check(cmd.Wait())
 }
 
-func (s *state) ServeHttp(addr string) {
+func loadTemplate() *template.Template {
 	// This seems pretty suboptimal, but I can't figure out how else
 	// to define functions before loading a template.
-	tmpl := template.Must(template.New("page").Funcs(template.FuncMap{
+	return template.Must(template.New("page").Funcs(template.FuncMap{
 		"kb": func(n int) string {
 			return fmt.Sprintf("%dkb", n/1024)
 		},
@@ -68,7 +68,9 @@ func (s *state) ServeHttp(addr string) {
 			return string(js), err
 		},
 	}).ParseFiles("page.html")).Lookup("page.html")
+}
 
+func (s *state) ServeHttp(addr string) {
 	http.HandleFunc("/graph.png", func(w http.ResponseWriter, req *http.Request) {
 		http.ServeFile(w, req, "graph.png")
 	})
@@ -94,6 +96,9 @@ func (s *state) ServeHttp(addr string) {
 			return
 		}
 
+		// Load the template on every page load so I can edit the HTML
+		// on the "live" page.
+		tmpl := loadTemplate()
 		err := tmpl.Execute(w, s)
 		check(err)
 	})

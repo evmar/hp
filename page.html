@@ -27,14 +27,36 @@ body {
 </script>
 <div id=control>
   {{with .Profile.Header}}
-  total allocated bytes: {{.InuseBytes | kb}} <br>
+  {{.InuseBytes | kb}} total inuse<br>
   {{end}}
 
   <form method=post>
-  show nodes &gt; <input name=node size=2>kb<br>
-  keep <input name=nodecount size=2 value={{.Params.NodeKeepCount}}> nodes<br>
-  show edges &gt; <input name=edge size=2>kb<br>
-  <input type=submit value=render>
+    <p>
+      show top <input id=nodecountText name=nodecount size=2 autocomplete=0 value={{.Params.NodeKeepCount}}><br>
+      (&gt; <span id=nodekb>X</span>kb) functions<br>
+      <input id=nodecountRange type=range min=10 max=300 step=10><br>
+  </p>
+
+  <script>
+    var textbox = document.getElementById('nodecountText');
+    var range = document.getElementById('nodecountRange');
+    var kb = document.getElementById('nodekb');
+    function updateKb() {
+      var min = kNodeSizes[parseInt(textbox.value)];
+      kb.innerText = (min/1024).toFixed(0);
+    }
+    textbox.addEventListener('keyup', function() {
+      range.value = textbox.value;
+      updateKb();
+    });
+    range.addEventListener('change', function() {
+      textbox.value = range.value;
+      updateKb();
+    });
+    updateKb();
+  </script>
+
+  <input type=submit value=rerender>
   </form>
 </div>
 <div id=display>
