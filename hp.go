@@ -216,14 +216,14 @@ func (s *state) GraphViz(w io.Writer) {
 		}
 		outdegree[edge.src]++
 		indegree[edge.dst]++
-		fmt.Fprintf(w, "%d -> %d [label=\" %.1f\"]\n", edge.src.addr, edge.dst.addr, float32(g.edges[edge])/1024.0)
+		fmt.Fprintf(w, "%d -> %d [label=\" %d\"]\n", edge.src.addr, edge.dst.addr, g.edges[edge]/1024)
 	}
 
 	total := 0
 	missing := 0
 	for n, _ := range keptNodes {
 		if indegree[n] == 0 && outdegree[n] == 0 {
-			log.Printf("no edges for %x (%.1fk)", n.addr, float32(n.cum.InuseBytes)/1024.0)
+			log.Printf("no edges for %x (%dk)", n.addr, n.cum.InuseBytes/1024)
 			missing += n.cum.InuseBytes
 			continue
 		}
@@ -231,8 +231,8 @@ func (s *state) GraphViz(w io.Writer) {
 		label := s.Label(n) + "\\n" + s.SizeLabel(n)
 		fmt.Fprintf(w, "%d [label=\"%s\",shape=box,href=\"%d\"]\n", n.addr, label, n.addr)
 	}
-	log.Printf("total not shown: %.1fk", float32(missing)/1024.0)
-	log.Printf("total kept nodes: %.1fk", float32(total)/1024.0)
+	log.Printf("total not shown: %dk", missing/1024.0)
+	log.Printf("total kept nodes: %dk", total/1024.0)
 
 	fmt.Fprintf(w, "}\n")
 }
