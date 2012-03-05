@@ -61,7 +61,8 @@ body {
   </form>
 </div>
 <div id=display>
-  <img src=graph.png>
+  <!-- Use a bogus CGI param to bypass browser cache. -->
+  <img src="graph.png?{{.Params}}">
 </div>
 <script>
 var display = document.getElementById('display');
