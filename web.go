@@ -61,6 +61,9 @@ func loadTemplate() *template.Template {
 			return fmt.Sprintf("%dkb", n/1024)
 		},
 		"firstn": func(n int, xs []int) []int {
+			if len(xs) < n {
+				return xs
+			}
 			return xs[:n]
 		},
 		"json": func(x interface{}) (string, error) {
