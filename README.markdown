@@ -7,7 +7,9 @@ slow).
 [google-perftools]: http://code.google.com/p/perftools/
 
 This reimplementation has much fewer features but is also much
-faster.
+faster.  For more discussion, see [my blog post][blog].
+
+[blog]: http://neugierig.org/software/blog/2012/03/heap-profiling.html
 
 To build:
 
