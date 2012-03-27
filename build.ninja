@@ -3,7 +3,7 @@ rule compile
 rule link
   command = go tool 6l -o $out $in
 
-build mt.6: compile mangle_linux_test.go mangle_linux.go parse.go
+build mt.6: compile linux_mangle_test.go linux_mangle.go parse.go
 build mt: link mt.6
-build hp.6: compile hp.go parse.go mangle.go util.go syms.go web.go mangle_linux.go
+build hp.6: compile hp.go parse.go mangle.go util.go syms.go web.go linux_mangle.go
 build hp: link hp.6
