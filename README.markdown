@@ -13,7 +13,7 @@ faster.  For more discussion, see [my blog post][blog].
 
 To build:
 
-    ninja   # http://martine.github.com/ninja
+    ninja   # https://ninja-build.org/
 
 or put the directory into your `GOROOT` and `go build`.
 
