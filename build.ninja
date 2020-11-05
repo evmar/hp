@@ -1,7 +1,7 @@
 rule compile
-  command = go tool 6g -o $out $in
+  command = go tool compile -o $out $in
 rule link
-  command = go tool 6l -o $out $in
+  command = go tool link -o $out $in
 
 build mt.6: compile linux_mangle_test.go linux_mangle.go parse.go
 build mt: link mt.6
